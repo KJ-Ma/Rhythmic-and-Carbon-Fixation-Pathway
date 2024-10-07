@@ -1,9 +1,11 @@
-# Metagenome Analysis Pipeline
+# Metagenome Mix-assembly Pipeline
 
 ## 1. Notes on file names
+
 The names of the metagenomic sequencing files contain sample information: for example, in mud01.2021.01.S, "mud" indicates that the sampling site is a mudflat, the number represents the sampling date (January 2021), and "S" indicates a sample depth of 1-5 cm (where "Z" represents a depth of 5-15 cm and "X" represents 15-25 cm). Similarly, in sand01.2021.01.D.S, "sand" indicates that the sampling site is a sandflat, the number denotes the sampling date (January 2021), "D" indicates a low tide sample (where "Z" represents mid tide and "G" represents high tide), and "S" again indicates a sample depth of 1-5 cm (with "Z" for 5-15 cm and "X" for 15-25 cm).
 
 ## 2. Software Versions
+
 - **FastQC**: v0.12.1
 - **MultiQC**: v1.14
 - **Trimmomatic**: v0.39
@@ -27,7 +29,9 @@ The names of the metagenomic sequencing files contain sample information: for ex
 - **Prokka**: v1.14.6
 - **METABOLIC**: v.4.0
 
-### 2.1 Quality Control
+## 3. Create MAG set
+
+### 3.1 Quality Control
 
 Batch processing through Amazon Web Services (AWS)
 All raw metagenomic sequencing data are stored in the "metagenome/01rawdata" folder on the AWS cloud platform for analysis.
@@ -97,7 +101,7 @@ rm fastqc_after_trimmomatic -rf
 rm multiqc_after_trimmomatic -rf
 echo 'done'
 ```
-### 2.2 Mix-assembly
+### 3.2 Mix-assembly
 
 Batch processing through Amazon Web Services (AWS)
 All clean metagenomic data are stored in the "metagenome/results/qc" folder on the AWS cloud platform for analysis.
@@ -191,7 +195,7 @@ rm ${assembly_dir} -rf
 
 echo 'done'
 ```
-### 2.3 Binning and Bin refinement
+### 3.3 Binning and Bin refinement
 
 Batch processing through Amazon Web Services (AWS)
 All assembly contigs are stored in the "$base_dir/results/mix3_assembly" folder on the AWS cloud platform for analysis.
@@ -290,7 +294,7 @@ rm ${refine_dir} -rf
 
 echo 'done'
 ```
-### 2.4 Dereplication of MAGs
+### 3.4 Dereplication of MAGs
 
 Link bins from three samples into the same folder and rename (all MAGs)
 ```sh
@@ -312,18 +316,22 @@ Execute dRep, 99% ANI similarity, 50% completeness, 10% contamination.
 ```sh
 nohup dRep dereplicate 03.dreped_MAG/ -g 02.renamed_MAG/*.fa -sa 0.99 -comp 50 -con 10 -nc 0.30 -p 32 -d > drep.log 2>&1 &
 ```
-### 2.5 Quantification of MAGs using coverm for relative abundance
+### 3.5 Quantification of MAGs using coverm for relative abundance
 
-cd /home/ec2-user/zhoushan/metagenome/04quantify_MAG
+Faster download from S3 Bucket
+```sh
+ls aws_mountpoint/metagenome/results/qc/ > list.txt
+parallel -j 4 --xapply "aws s3 cp s3://makuojian/metagenome/results/qc/{}/cleandata/ ./cleandata/ --recursive" ::: `tail -n+1 list.txt`
+```
+Calculate relative abundance of 4507 non-redundant MAGs. 
+```sh
+screen -S coverm
+coverm genome -t 64 --min-read-percent-identity 95 --min-read-aligned-percent 75 --trim-min 10 --trim-max 90 -m relative_abundance \
+  --coupled ../cleandata/*paired*.fastq --genome-fasta-files ../derep/03.dreped_MAG/dereplicated_genomes/Mix*.fa -o relative_MAG.tsv
+```
+## 3.6 Taxonomic annotation of MAGs using GTDBtk
 
-
-
-
-
-
-
-
-
-
-
-
+Genome annotation.
+```sh
+gtdbtk classify_wf --genome_dir derep/03.dreped_MAG/dereplicated_genomes/ --out_dir ./mix_gtdbtk_annotation --extension fa --skip_ani_screen --prefix tax --cpus 64
+```
