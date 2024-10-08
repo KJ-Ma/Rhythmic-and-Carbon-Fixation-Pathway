@@ -25,7 +25,7 @@ otutable <- read.table("final_rhythmic_ASV_mudX.txt", sep = "\t", header = TRUE,
 
 # Load metadata and environmental data
 fastmap <- read.table("metadata_mudX.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
-env <- read.table("../env.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
+env <- read.table("../env_mudX.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
 
 # Transpose and rename ASV columns
 otutable.t <- t(otutable)
