@@ -78,18 +78,8 @@ done
 parallel -j 1 --xapply "cat protein_temp/{}_protein.fasta >> 07partial_cdhit2/all_protein.fasta" ::: `tail -n+1 ../list.txt`
 seqkit grep -n -f non_redundancy_gene_list.txt all_protein.fasta > non_redundancy_protein.fasta
 ```
-### 3.2 Species annotation and quantification
+### 3.2 Quantification
 
-DIAMOND NR database annotation
-```sh
-nohup diamond blastp -d /home/adm/database/NCBI/NCBI_NR/nr_20230728.dmnd -q ../07rm_redundancy/07partial_cdhit2/non_redundancy_protein.fasta \
-  --outfmt 6 --max-target-seqs 5 -e 1e-10 --query-cover 80 --id 50 --threads 100 -c 1 -b 12 -o diamond_annotation_nr.tsv > diamond_log.txt 2>&1 &
-```
-Use blast2lca with MEGAN to extract species information
-```sh
-split -n l/500 diamond_annotation_nr.tsv diamond_annotation_nr
-parallel -j 20 --xapply "blast2lca -i {}.tsv -o megan_output/{}.LCA -f BlastTab -ms 50 -me 0.001 --mapDB /home/ec2-user/software/db/megan/megan-map-Feb2022.db" ::: `tail -n+1 list.txt`
-```
 Index sequences with bwa for read mapping
 ```sh
 bwa index -p non_redundancy_nucleotide ../all_cdhit_nucleotide.fasta
@@ -104,4 +94,45 @@ Summarize RPKM across samples
 ```sh
 python /home/ec2-user/scripts/sort_bbmap_result.py RPKM
 python sort_bbmap_result_huizong.py
+```
+### 3.3 Annatation
+
+DIAMOND NR database annotation
+```sh
+nohup diamond blastp -d /home/adm/database/NCBI/NCBI_NR/nr_20230728.dmnd -q ../07rm_redundancy/07partial_cdhit2/non_redundancy_protein.fasta \
+  --outfmt 6 --max-target-seqs 5 -e 1e-10 --query-cover 80 --id 50 --threads 100 -c 1 -b 12 -o diamond_annotation_nr.tsv > diamond_log.txt 2>&1 &
+```
+EggNOG Annotation
+```sh
+nohup emapper.py -i ../07rm_redundancy/07partial_cdhit2/non_redundancy_protein.fasta --output eggnog/protein --data_dir /home/adm/database/emapper --dmnd_db /home/adm/database/emapper/eggnog_proteins.dmnd -m diamond --seed_ortholog_evalue 1e-5 --block_size 6 --index_chunks 1 --cpu 100 > emapper_log.txt 2>&1 &
+```
+Merge EggNOG annotations and abundance data
+```sh
+python merge_abundance_eggnog.py  # Generates merged_RPKM.txt with COG_category, Description, Preferred_name, KEGG_ko columns
+python modify_abundance_eggnog.py # Cleans and modifies the file, adding headers and handling empty values, outputs merged_RPKM_eggnog.txt.
+```
+Ncyc Database Annotation
+```sh
+nohup diamond blastp -d /home/adm/database/Ncyc/data/NCyc_100.dmnd -q ../non_redundancy_protein/non_redundancy_protein_renamed.fasta --outfmt 6 --max-target-seqs 1 -e 1e-10 --query-cover 80 --id 50 --threads 36 -c 1 -b 12 -o diamond_ncyc.tsv > diamond_ncyc_log.txt 2>&1 &
+./sort_diamond_ncyc.sh # Generates diamond_ncyc_sorted.tsv with gene names and functions.
+```
+Scyc Database Annotation
+```sh
+nohup diamond blastp -d /home/adm/database/Scyc/SCycDB_2020Mar.dmnd -q ../non_redundancy_protein/non_redundancy_protein_renamed.fasta --outfmt 6 --max-target-seqs 1 -e 1e-10 --query-cover 80 --id 50 --threads 20 -c 1 -b 12 -o diamond_scyc.tsv > diamond_scyc_log.txt 2>&1 &
+./sort_diamond_scyc.sh # Generates diamond_scyc_sorted.tsv.
+```
+Mcyc Database Annotation
+```sh
+nohup diamond blastp -d db/MCycDB_2021.dmnd -q ../non_redundancy_protein/non_redundancy_protein_renamed.fasta --outfmt 6 --max-target-seqs 1 -e 1e-10 --query-cover 80 --id 50 --threads 20 -c 1 -b 12 -o diamond_mcyc.tsv > diamond_mcyc_log.txt 2>&1 &
+./sort_diamond_mcyc.sh # Generates diamond_mcyc_sorted.tsv.
+```
+dbCAN Annotation
+```sh
+run_dbcan ../non_redundancy_protein/non_redundancy_protein_renamed.fasta protein --db_dir /home/adm/database/dbcan --tools hmmer --hmm_cpu 2 --stp_cpu 2 --tf_cpu 2 --out_dir ./
+```
+KEGG Annotation
+```sh
+/home/adm/software/kofam_scan-1.3.0/exec_annotation -f mapper -c config.yml --tmp-dir tmp_{} -E 1e-5 --cpu 8 ../non_redundancy_protein/non_redundancy_protein_renamed.fasta -o kegg_result_merged.txt
+awk -F'\t' 'NR==1{print "gene_name\tkegg_result"} $2!=""{print}' kegg_result_merged.txt > kegg_result_1.txt
+awk '!seen[$1]++' kegg_result_1.txt > kegg_result_sorted.txt
 ```
