@@ -2,26 +2,26 @@
 import pandas as pd
 
 def merge_multiple_files(file_paths, output_path):
-    # 初始化一个空的DataFrame作为合并的基础
+    # Initialize an empty DataFrame as the basis for merging
     merged_df = pd.DataFrame()
 
-    # 遍历所有文件路径
+    # Iterate through all file paths
     for file in file_paths:
-        # 读取每个文件到DataFrame
+        # Read each file into a DataFrame
         df = pd.read_csv(file, sep='\t', index_col='gene_name')
 
-        # 如果merged_df为空，则直接赋值，否则进行合并
+        # If merged_df is empty, directly assign, otherwise merge
         if merged_df.empty:
             merged_df = df
         else:
             merged_df = merged_df.join(df, how='outer')
 
-    # 保存合并后的DataFrame到指定的输出文件
+    # Save the merged DataFrame to the specified output file
     merged_df.to_csv(output_path, sep='\t')
 
-# 文件路径列表
-file_paths = ['RPKM1.txt', 'RPKM2.txt', 'RPKM3.txt', 'RPKM4.txt'] # 添加更多文件路径
-output_path = 'RPKM.txt' # 合并后的输出文件路径
+# List of file paths
+file_paths = ['RPKM1.txt', 'RPKM2.txt', 'RPKM3.txt', 'RPKM4.txt']  # Add more file paths as needed
+output_path = 'RPKM.txt'  # Path for the merged output file
 
-# 调用函数进行合并
+# Call the function to perform the merge
 merge_multiple_files(file_paths, output_path)
