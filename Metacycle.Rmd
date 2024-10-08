@@ -1,40 +1,37 @@
-```{r}
 library(tidyverse)
 library(openxlsx)
 library(dplyr)
 
+# Read and transpose the data
+rawdata1 <- as.data.frame(t(read.table("feature_table_tax_rare.txt", 
+                                       header = TRUE, row.names = 1, sep = "\t")))
 
-# 读取数据，并转置
-rawdata1 <- as.data.frame(t(read.table("feature_table_tax_rare.txt", header = TRUE, row.names = 1, sep = "\t")))
-
-# 第一列添加month列
+# Add a month column (1 to 24, 3 samples each)
 rawdata2 <- cbind(month = rep(1:24, each = 3), rawdata1)
 
-# 根据第一列（month）合并相同行名的行并求和
+# Group by month and sum the values for identical months
 data <- rawdata2 %>%
   group_by(month) %>%
   summarise_all(sum)
 
-# 转置
+# Transpose the data after summarization
 tdata <- as.data.frame(t(data))
 
-# 保存结果到Excel文件
+# Create a directory to save intermediate files, if it doesn't exist
 if (!file.exists("interfile")) {
   dir.create("interfile")
 }
 
-# 输出文件
-write.table(tdata, file = "interfile/feature_table_tax_rare_inter.txt", sep = "\t", row.names = T, quote = F, col.names = FALSE)
-```
+# Save the transposed data to a text file
+write.table(tdata, file = "interfile/feature_table_tax_rare_inter.txt", 
+            sep = "\t", row.names = TRUE, quote = FALSE, col.names = FALSE)
 
-```{r}
+# Running MetaCycle Analysis
+
 library(MetaCycle)
 
-#运行meta2d命令，其中timepoints=rep(seq(1, 24, by=1), each=3)表示：时间点是从
-#第1月采集到了第24月，采样时间间隔为1个月，3个重复
-meta2d(infile="interfile/feature_table_tax_rare_inter.txt", filestyle="txt",
-  outdir="metacycle_result", timepoints=rep(seq(1, 24, by=1), each=1), 
-  ARSdefaultPer = 12, minper = 10, maxper = 14,
-  cycMethod=c("JTK","LS"), outIntegration="both")
-```
-
+# Run meta2d for periodicity detection using MetaCycle
+meta2d(infile = "interfile/feature_table_tax_rare_inter.txt", filestyle = "txt",
+       outdir = "metacycle_result", timepoints = rep(seq(1, 24, by = 1), each = 1), 
+       ARSdefaultPer = 12, minper = 10, maxper = 14,
+       cycMethod = c("JTK", "LS"), outIntegration = "both")
