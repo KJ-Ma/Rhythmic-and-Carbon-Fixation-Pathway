@@ -335,3 +335,42 @@ Genome annotation.
 ```sh
 gtdbtk classify_wf --genome_dir derep/03.dreped_MAG/dereplicated_genomes/ --out_dir ./mix_gtdbtk_annotation --extension fa --skip_ani_screen --prefix tax --cpus 64
 ```
+## 3.7 Functional annotation of MAGs
+
+Run Prokka
+```sh
+parallel -j 20 --xapply "sed -i 's/^\(>k141_[0-9]\+\).*$/\1/' dereplicated_genomes/{}" ::: `ls dereplicated_genomes/`
+parallel -j 6 --xapply "prokka -o prokka_out/{}/ --prefix {} --locustag {} --gcode 11 --cpus 6 dereplicated_genomes/{}" ::: `ls dereplicated_genomes/`
+```
+Run METABOLIC-C
+```sh
+perl /home/adm/software/METABOLIC/METABOLIC-C.pl -in-gn MAG/ -o 01_metabolic/
+```
+Annotate all MAGs using KEGG
+```sh
+parallel -j 4 --xapply "/home/adm/software/kofam_scan-1.3.0/exec_annotation -f mapper -c config.yml --tmp-dir tmp -E 1e-5 --cpu 24 {}.faa -o {}.txt" ::: $(find MAG/ -type f -exec basename {} \; | sed 's/\.faa$//')
+```
+## 3.8 Phylogenetic Tree Reconstruction
+
+Use Trimal to trim sequence
+```sh
+nohup trimal -in tax.ar53.user_msa.fasta -out arc/gtdb_trimal_arc.fasta -gt 0.95 -cons 50 > trimal_arc_log.txt 2>&1 &
+nohup trimal -in tax.bac120.user_msa.fasta -out bac/gtdb_trimal_bac.fasta -gt 0.95 -cons 50 > trimal_bac_log.txt 2>&1 &
+```
+Use IQ-TREE to predict the best model and reconstruct Phylogenetic tree (ModelFinder is built into IQ-TREE)
+```sh
+nohup iqtree -s arc/gtdb_trimal_arc.fasta -m MFP -bb 1000 -bnni -nt 24 -pre arc/iqtree/iqtree_arc > iqtree_arc_log.txt 2>&1 &
+nohup iqtree -s bac/gtdb_trimal_bac.fasta -m MFP -bb 1000 -bnni -nt 24 -pre bac/iqtree/iqtree_bac > iqtree_bac_log.txt 2>&1 &
+```
+Assess MAG quality using CheckM
+```sh
+screen -S checkm
+nohup checkm lineage_wf -t 36 --pplacer_threads 24 -x fa --tab_table -f checkm/results.tsv dereplicated_genomes/ checkm/
+```
+Detect 16S rRNA in MAGs using Barrnap
+```sh
+parallel -j 24 --xapply "barrnap --threads 2 dereplicated_genomes/{} > barrnap_out/{}.gff3" ::: `ls dereplicated_genomes/`
+grep -c "16S ribosomal RNA" barrnap_out/*.gff3 > barrnap_stats/barrnap_out_16S_stats.txt
+grep -c "5S ribosomal RNA" barrnap_out/*.gff3 > barrnap_stats/barrnap_out_5S_stats.txt
+grep -c "23S ribosomal RNA" barrnap_out/*.gff3 > barrnap_stats/barrnap_out_23S_stats.txt
+```
