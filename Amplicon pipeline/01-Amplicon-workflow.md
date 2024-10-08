@@ -118,7 +118,7 @@ Alpha rarefaction curve
 qiime diversity alpha-rarefaction \
   --i-table feature-table-finally.qza \
   --i-phylogeny rooted-tree.qza \
-  --p-max-depth 168807 \
+  --p-max-depth 48208 \
   --m-metadata-file ../04.taxonomy/metadata.txt \
   --o-visualization alpha-rarefaction.qzv
 ```
@@ -182,7 +182,7 @@ Taxonomy bar plot
 qiime taxa barplot \
   --i-table ../01.data/02.latest_data/feature-table-finally.qza \
   --i-taxonomy ../01.data/02.latest_data/taxonomy.qza \
-  --m-metadata-file ../metadata.txt \
+  --m-metadata-file ../metadata_mudS.txt \
   --o-visualization taxa-bar-plots.qzv
 ```
 ### 4.3 Data Processing
@@ -219,16 +219,16 @@ qiime diversity core-metrics-phylogenetic \
   --i-table ../01.data/02.latest_data/feature-table-finally.qza \
   --p-sampling-depth 40208 \
   --p-n-jobs-or-threads 8 \
-  --m-metadata-file ../metadata.txt \
+  --m-metadata-file ../metadata_mudS.txt \
   --output-dir core-metrics-results
 ```
 Alpha diversity significance tests
 ```
-parallel -j 8 --xapply "qiime diversity alpha-group-significance --i-alpha-diversity core-metrics-results/{1}.qza --m-metadata-file ../metadata.txt --o-visualization core-metrics-results/{1}-group-significance.qzv" ::: ls -1 core-metrics-results/*vector.qza | xargs -I {} basename {} .qza
+parallel -j 8 --xapply "qiime diversity alpha-group-significance --i-alpha-diversity core-metrics-results/{1}.qza --m-metadata-file ../metadata_mudS.txt --o-visualization core-metrics-results/{1}-group-significance.qzv" ::: ls -1 core-metrics-results/*vector.qza | xargs -I {} basename {} .qza
 ```
 Beta diversity significance tests
 ```sh
-parallel -j 8 --xapply "qiime diversity beta-group-significance --i-distance-matrix core-metrics-results/{1}.qza --m-metadata-file ../metadata.txt --m-metadata-column Month --o-visualization core-metrics-results/{1}-group-significance.qzv --p-pairwise" ::: ls -1 core-metrics-results/*matrix.qza | xargs -I {} basename {} .qza
+parallel -j 8 --xapply "qiime diversity beta-group-significance --i-distance-matrix core-metrics-results/{1}.qza --m-metadata-file ../metadata_mudS.txt --m-metadata-column Month --o-visualization core-metrics-results/{1}-group-significance.qzv --p-pairwise" ::: ls -1 core-metrics-results/*matrix.qza | xargs -I {} basename {} .qza
 ```
 ### 4.4 Data Export
 
