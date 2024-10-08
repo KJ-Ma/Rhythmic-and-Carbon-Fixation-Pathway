@@ -1,0 +1,1 @@
+find 02contigs_500 -type f -name "*.fa" | parallel -j 32 'base=$(basename {} .fa); count=0; while IFS= read -r line; do if [[ $line == ">"* ]]; then count=$((count + 1)); echo ">$base|seq$(printf "%05d" $count)"; else echo "$line"; fi; done < {} > "03renamed_contigs/${base}_modified.fa"'
