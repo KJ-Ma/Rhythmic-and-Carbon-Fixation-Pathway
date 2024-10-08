@@ -6,10 +6,10 @@ library(dplyr)
 library(cols4all)
 
 # Read environmental data file
-env <- read.delim("env.txt", sep = "\t", header = TRUE, row.names = 1)
+env <- read.delim("env_mud.txt", sep = "\t", header = TRUE, row.names = 1)
 
 # Read ASV data file and remove species annotation information
-species <- read.delim("feature_table_tax_rare.txt", sep = "\t", header = TRUE, row.names = 1)
+species <- read.delim("feature_table_tax_rare_mud.txt", sep = "\t", header = TRUE, row.names = 1)
 species <- species[, -ncol(species)]
 species <- t(species)
 
