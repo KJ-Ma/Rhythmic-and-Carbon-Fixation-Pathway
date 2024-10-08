@@ -1,0 +1,97 @@
+
+
+```{r}
+
+#加载R包
+library(ggplot2)
+library(vegan)
+library(readr)
+
+# 读取样本分组数据文件
+dfGroup = read_delim("metadata.txt", "\t", escape_double = FALSE, trim_ws = TRUE, show_col_types = FALSE)
+
+# 读取NMDS数据文件
+feature_tax <- read.delim("feature_table_tax_rare.txt", sep = "\t", header = TRUE, row.names = 1)
+
+feature <- feature_tax[, -ncol(feature_tax)]
+
+df <- t(feature)
+
+```
+
+```{r}
+
+# NMDS计算,可选：euclidean、bray、jaccard
+dfNmds<-metaMDS(df,distance="bray",k = 2)
+
+# 绘图前的数据整理
+data = data.frame(dfNmds$points)
+data$group = dfGroup$Type_Tide_Depth
+```
+
+```{r}
+#计算三个显著性
+
+#构建距离矩阵
+otu.distance <- vegdist(df, method = "bray")
+
+#使用vegan包中的adosim函数进行adosim分析
+anosim_result <- anosim(otu.distance, dfGroup$Type_Tide_Depth, permutations = 999)
+
+# 使用 MRPP
+mrpp_result <- mrpp(otu.distance, dfGroup$Type_Tide_Depth, permutations = 999)
+
+# 使用 Adonis
+
+adonis_result <- adonis2(otu.distance ~ dfGroup$Type_Tide_Depth)
+
+```
+
+
+
+```{r}
+
+# 使用RColorBrewer提供的调色板
+colors <- c("#E41A1C", "#377EB8", "#4DAF4A", "#FF7F00", 
+            "#984EA3", "#FFFF33", "#A61941", "#F781BF", 
+            "#999999", "#66CCFF", "#6982B4", "#8B4513")
+
+# 为每个组分配颜色
+group_colors <- setNames(colors, c("mud_Low_1_5cm", "mud_Low_5_15cm", 
+                                   "mud_Low_15_25cm", "sand_Low_1_5cm", 
+                                   "sand_Low_5_15cm", "sand_Low_15_25cm", 
+                                   "sand_Median_1_5cm", "sand_Median_5_15cm", 
+                                   "sand_Median_15_25cm", "sand_High_1_5cm", 
+                                   "sand_High_5_15cm", "sand_High_15_25cm"))
+
+p <- ggplot(data, aes(x = MDS1, y = MDS2, color = group, fill = group, group = group)) +
+  geom_point(size = 3) +
+  scale_color_manual(
+    values = group_colors, 
+    breaks = names(group_colors)) +
+  scale_fill_manual(
+    values = group_colors, 
+    breaks = names(group_colors)) +
+  theme_classic(base_size = 20) +   # 去除背景网格线
+  stat_ellipse(geom = "polygon", level = 0.95, alpha = 0.1, segments = 10000, linetype = 1, linewidth = 0.6) +
+  labs(subtitle = paste("Stress =", round(dfNmds$stress, 4), "\n", 
+                        "ADONIS =", round(adonis_result$`Pr(>F)`[1], 4), "\n", 
+                        "ANOSIM =", round(anosim_result$signif, 4), "\n", 
+                        "MRPP =", round(mrpp_result$Pvalue, 4))) + 
+  theme(axis.text = element_text(size = 20))
+
+# 保存图片
+if (!dir.exists("NMDS_sig_plot_12")) {
+  dir.create("NMDS_sig_plot_12")
+}
+
+# 保存图形到PDF和PNG文件
+ggsave("NMDS_sig_plot_12/NMDS_plot_12_new.pdf", p, width = 15, height = 10)
+ggsave("NMDS_sig_plot_12/NMDS_plot_12_new.png", p, bg = "white", width = 15, height = 10)  # 设置PNG图片的背景色为白色
+
+
+
+```
+
+
+
