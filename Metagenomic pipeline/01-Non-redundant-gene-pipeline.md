@@ -83,12 +83,12 @@ seqkit grep -n -f non_redundancy_gene_list.txt all_protein.fasta > non_redundanc
 Index sequences with bwa for read mapping
 ```sh
 bwa index -p non_redundancy_nucleotide ../all_cdhit_nucleotide.fasta
-parallel -j 2 --xapply "bwa mem -t 124 bwa_index/non_redundancy_nucleotide ../cleandata/{}.paired.R_1.fastq ../cleandata/{}.paired.R_2.fastq | gzip -3 > bwa_out/{}.sam.gz" ::: `tail -n+1 list.txt`
+parallel -j 2 --xapply "bwa mem -t 124 bwa_index/non_redundancy_nucleotide ../cleandata/{}.paired.R_1.fastq ../cleandata/{}.paired.R_2.fastq | gzip -3 > bwa_out/{}.sam.gz" ::: `tail -n+1 list_all_sample.txt`
 ```
 BBMap for RPKM calculation
 ```sh
 sed 's/ .*//' all_cdhit_nucleotide.fasta > all_cdhit_nucleotide_renamed.fasta
-nohup parallel -j 5 --xapply "pileup.sh in=bwa_out/{}.sam.gz ref=all_cdhit_nucleotide_renamed.fasta out=bbmap_out/{}.coverage.txt -Xmx200g rpkm=bbmap_out/{}.rpkm.out && pigz -9 bbmap_out/{}.coverage.txt" ::: `tail -n+1 list.txt` > pileup_log.txt 2>&1 &
+nohup parallel -j 5 --xapply "pileup.sh in=bwa_out/{}.sam.gz ref=all_cdhit_nucleotide_renamed.fasta out=bbmap_out/{}.coverage.txt -Xmx200g rpkm=bbmap_out/{}.rpkm.out && pigz -9 bbmap_out/{}.coverage.txt" ::: `tail -n+1 list_all_sample.txt` > pileup_log.txt 2>&1 &
 ```
 Summarize RPKM across samples
 ```sh
