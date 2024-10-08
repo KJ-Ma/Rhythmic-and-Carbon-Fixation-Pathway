@@ -5,8 +5,8 @@ library(ggridges)
 library(openxlsx)
 
 # Read in the files
-lomb <- read.xlsx("lomb_results_noreplicate_asv.xlsx", colNames = TRUE, rowNames = TRUE)
-jtk <- read.table("JTKresult_feature_table_tax_rare_inter.txt", header = TRUE, sep = "\t", check.names = FALSE, row.names = 1)
+lomb <- read.xlsx("lomb_results_noreplicate_asv_mudX.xlsx", colNames = TRUE, rowNames = TRUE)
+jtk <- read.table("JTKresult_feature_table_tax_rare_inter_mudX.txt", header = TRUE, sep = "\t", check.names = FALSE, row.names = 1)
 feature_table <- read.table("feature_table_tax_rare.txt", header = TRUE, sep = "\t", check.names = FALSE, row.names = 1)
 
 # Filter Lomb and JTK results
