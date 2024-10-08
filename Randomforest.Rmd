@@ -21,10 +21,10 @@ for(p in package_list) {
 # 2. Data loading and preprocessing
 
 # Load the species abundance table
-otutable <- read.table("final_rhythmic_ASV.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
+otutable <- read.table("final_rhythmic_ASV_mudX.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
 
 # Load metadata and environmental data
-fastmap <- read.table("metadata.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
+fastmap <- read.table("metadata_mudX.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
 env <- read.table("../env.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
 
 # Transpose and rename ASV columns
