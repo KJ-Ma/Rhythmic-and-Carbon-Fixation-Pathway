@@ -1,194 +1,178 @@
+# 1. Install CRAN source packages
 
-```{r}
-# 1安装CRAN来源常用包
-#设置镜像，
- local({r <- getOption("repos")  
- r["CRAN"] <- "http://mirrors.tuna.tsinghua.edu.cn/CRAN/"   
-options(repos=r)}) 
+# Set CRAN mirror to Tsinghua University
+local({
+  r <- getOption("repos")  
+  r["CRAN"] <- "http://mirrors.tuna.tsinghua.edu.cn/CRAN/"   
+  options(repos = r)
+}) 
 
-# 依赖包列表安装与加载：
-package_list <- c("ggplot2","RColorBrewer","randomForest","caret", "dplyr","ggrepel","pheatmap")
+# Install and load the required packages
+package_list <- c("ggplot2", "RColorBrewer", "randomForest", "caret", "dplyr", "ggrepel", "pheatmap")
 
-#e1071
-# 判断R包加载是否成功来决定是否安装后再加载
-for(p in package_list){
-  if(!suppressWarnings(suppressMessages(require(p, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)))){
-    install.packages(p,  warn.conflicts = FALSE)
+# Install missing packages and load all
+for(p in package_list) {
+  if(!suppressWarnings(suppressMessages(require(p, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)))) {
+    install.packages(p, warn.conflicts = FALSE)
     suppressWarnings(suppressMessages(library(p, character.only = TRUE, quietly = TRUE, warn.conflicts = FALSE)))
   }
 }
-```
 
-```{r}
-#读入物种丰度表格
-otutable<-read.table("final_rhythmic_ASV.txt",sep="\t",header = TRUE, 
-                     check.names=FALSE,comment.char="",row.names= 1)
+# 2. Data loading and preprocessing
 
-#读入fastmap信息
-fastmap <- read.table("metadata.txt",sep="\t",header =TRUE,
-                check.names=FALSE,comment.char="",row.names= 1)
-env <- read.table("../env.txt",sep="\t",header =TRUE,
-                check.names=FALSE,comment.char="",row.names= 1)
+# Load the species abundance table
+otutable <- read.table("final_rhythmic_ASV.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
 
-#转置一下，并重命名ASV名称，否则后面会报错
-otutable.t<-t(otutable)   #转置一下，使样品为行名，方便做随机森林分析
-otutable.t<-as.data.frame(otutable.t)   #转化成数据框格式
+# Load metadata and environmental data
+fastmap <- read.table("metadata.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
+env <- read.table("../env.txt", sep = "\t", header = TRUE, check.names = FALSE, comment.char = "", row.names = 1)
+
+# Transpose and rename ASV columns
+otutable.t <- t(otutable)
+otutable.t <- as.data.frame(otutable.t)
 colnames(otutable.t)[1:321] <- paste0("ASV_", 1:321)
 
-#数据中添加需要预测的变量值，这里我们预测Temperature
-otutable.t$Temperature<-env$Temperature
+# Add the target variable for prediction: Temperature
+otutable.t$Temperature <- env$Temperature
 
-#随机划分数据集，取第一年作为训练集
-fastmap_Discovery<-subset(fastmap,phase=="Discovery") #筛选Discovery的样本训练
-fastmap_validation<-subset(fastmap,phase=="Validation") #筛选validation的样本测试
+# Split data into Discovery (train) and Validation (test) sets
+fastmap_Discovery <- subset(fastmap, phase == "Discovery")
+fastmap_validation <- subset(fastmap, phase == "Validation")
 
-trainset <- otutable.t[rownames(fastmap_Discovery),]
-testset <- otutable.t[rownames(fastmap_validation),]
+trainset <- otutable.t[rownames(fastmap_Discovery), ]
+testset <- otutable.t[rownames(fastmap_validation), ]
 
-set.seed(500) # 设置随机数种子，保证结果的可重复性，模型会收到随机数影响，可以多次尝试不同的随机数
+# Set random seed for reproducibility
+set.seed(500)
 
-#随机森林会根据预测变量自动选择 回归模式
-rf.train <- randomForest(Temperature~., #Temperature指标作为目标变量 
-                   data=trainset, # 使用训练集构建随机森林
-                   ntree = 1000, # 决策树的数量，默认的是1000
-                   importance = TRUE, # 是否评估预测变量的重要性
-                   proximity = TRUE) # 是否计算行之间的接近度
-rf.train   #初步看一下模型的预测准确性：准确率=1-OOB 
-plot(rf.train)   #模型树的确定
+# 3. Random Forest model training
 
-```
+# Train a random forest model
+rf.train <- randomForest(Temperature ~ ., 
+                         data = trainset, 
+                         ntree = 1000, 
+                         importance = TRUE, 
+                         proximity = TRUE)
+rf.train  # View model performance
+plot(rf.train)  # Plot the decision tree
 
-```{r}
-imp= as.data.frame(rf.train$importance)
-imp = imp[order(imp$`%IncMSE`,decreasing = T),]
+# 4. Feature importance extraction
+
+# Extract and save feature importance
+imp <- as.data.frame(rf.train$importance)
+imp <- imp[order(imp$`%IncMSE`, decreasing = TRUE),]
 
 if (!dir.exists("randomforest_out")) {
   dir.create("randomforest_out")
 }
 
-write.table(imp,file = "randomforest_out/importance_feature.txt",quote = F,sep = '\t', row.names = T, col.names = T)  #输出重要性
+write.table(imp, file = "randomforest_out/importance_feature.txt", quote = FALSE, sep = '\t', row.names = TRUE, col.names = TRUE)
 head(imp)
 
-varImpPlot(rf.train)  #重要性绘图
+# Plot variable importance
+varImpPlot(rf.train)
 
-```
+# 5. Visualize top 20 important features
 
-```{r}
-imp_sub=imp[1:20,]
-imp_sub$taxa<-rownames(imp_sub)
-# 添加因子保持顺序
-imp_sub$taxa=factor(imp_sub$taxa,order=T,levels = rev(imp_sub$taxa))
-p=ggplot(data = imp_sub, mapping = aes(x=taxa,y=`%IncMSE`)) + 
-  geom_bar(stat="identity")+coord_flip()+theme_bw()+
-  theme(panel.grid=element_blank(), 
-				axis.text.x=element_text(colour="black"),
-				axis.text.y=element_text(colour="black"),
-				panel.border=element_rect(colour = "black"),
-				legend.key = element_blank(),plot.title = element_text(hjust = 0.5))
+imp_sub <- imp[1:20, ]
+imp_sub$taxa <- rownames(imp_sub)
+imp_sub$taxa <- factor(imp_sub$taxa, order = TRUE, levels = rev(imp_sub$taxa))
+
+p <- ggplot(data = imp_sub, mapping = aes(x = taxa, y = `%IncMSE`)) + 
+  geom_bar(stat = "identity") + coord_flip() + theme_bw() +
+  theme(panel.grid = element_blank(),
+        axis.text.x = element_text(colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        panel.border = element_rect(colour = "black"),
+        legend.key = element_blank(), plot.title = element_text(hjust = 0.5))
 p
-```
 
-```{r}
-#这里采用10 fold，重复5次
+# 6. Cross-validation for Random Forest
+
+# 10-fold cross-validation repeated 5 times
 set.seed(123)
-result= replicate(5, rfcv(trainset[,-ncol(trainset)],trainset$Temperature,cv.fold=10), simplify=FALSE)    
-error.cv= sapply(result, "[[", "error.cv")
-matplot(result[[1]]$n.var, cbind(rowMeans(error.cv), error.cv), type="l",
-        lwd=c(2, rep(1, ncol(error.cv))), col=1, lty=1, log="x",
-        xlab="Number of variables", ylab="CV Error")
+result <- replicate(5, rfcv(trainset[,-ncol(trainset)], trainset$Temperature, cv.fold = 10), simplify = FALSE)    
+error.cv <- sapply(result, "[[", "error.cv")
 
-#输出交叉验证结果,方便后续美化出图,
-cv.result=cbind(result[[1]]$n.var, rowMeans(error.cv), error.cv)
+# Plot cross-validation error
+matplot(result[[1]]$n.var, cbind(rowMeans(error.cv), error.cv), type = "l",
+        lwd = c(2, rep(1, ncol(error.cv))), col = 1, lty = 1, log = "x",
+        xlab = "Number of variables", ylab = "CV Error")
 
-write.table(cv.result,file ="randomforest_out/rfcv_result.txt",quote = F,sep = '\t', row.names = T, col.names = T)
-
+# Save cross-validation results
+cv.result <- cbind(result[[1]]$n.var, rowMeans(error.cv), error.cv)
+write.table(cv.result, file = "randomforest_out/rfcv_result.txt", quote = FALSE, sep = '\t', row.names = TRUE, col.names = TRUE)
 cv.result
-```
 
-```{r}
-#确定用于模型构建的数量后，
-#再优化模型选择最佳mtry，也就是每课树中的预测变量数量
-#这里选择前10个重要的变量，并优化选择最佳mtry
-rf.formula=as.formula(paste0("Temperature ~",paste(row.names(imp)[1:10],collapse="+")))
+# 7. Model tuning with optimized mtry
+
+# Formula using the top 10 important variables
+rf.formula <- as.formula(paste0("Temperature ~", paste(row.names(imp)[1:10], collapse = "+")))
 rf.formula
 
-#校准模型mtry
-train.res=train(rf.formula, 
-               data = trainset, # Use the train data frame as the training data
-               method = 'rf',# Use the 'random forest' algorithm
-               trControl = trainControl(method='cv', 
-                        number=10, 
-                        search='grid')) # Use 10 folds for cross-validation 
-
+# Train model using caret with optimized mtry
+train.res <- train(rf.formula, 
+                   data = trainset, 
+                   method = 'rf', 
+                   trControl = trainControl(method = 'cv', number = 10, search = 'grid'))
 train.res
 
-#选择最佳：mtry
-model <- randomForest(rf.formula, # 新建的模型
-                   data=trainset, # 使用训练集构建随机森林
-                   ntree = 500, # 决策树的数量，默认的是500
-                   mtry = 3, # 每个分组中随机的变量数，默认是变量数开根
-                   importance = TRUE, # 是否评估预测变量的重要性
-                   proximity = TRUE) # 是否计算行之间的接近度
-
+# Build Random Forest model with optimized mtry
+model <- randomForest(rf.formula, 
+                      data = trainset, 
+                      ntree = 500, 
+                      mtry = 3, 
+                      importance = TRUE, 
+                      proximity = TRUE)
 model
 
-```
+# 8. Testing model accuracy on test data
 
-```{r}
-### 用测试数据集测试预测准确性
-# type="response",表示输出预测值
-pred1 <- predict(model, newdata = testset,type="response")
-#预测结果
-pred_result = data.frame(observed = testset$Temperature, predict = pred1)
+# Make predictions on the test set
+pred1 <- predict(model, newdata = testset, type = "response")
+pred_result <- data.frame(observed = testset$Temperature, predict = pred1)
 
-#保存结果
-write.table(pred_result,file = "randomforest_out/testset_predict.txt",quote = F,sep = '\t', row.names = T, col.names = T)
-#查看相关性检验
-cor = cor.test(pred_result[,1], pred_result[,2], method = "spearman") # spearman or pearson
+# Save prediction results
+write.table(pred_result, file = "randomforest_out/testset_predict.txt", quote = FALSE, sep = '\t', row.names = TRUE, col.names = TRUE)
 
-#相关性拟合展示：
+# Correlation test and fit plot
+cor <- cor.test(pred_result[,1], pred_result[,2], method = "spearman")
 
-m = lm(observed ~ predict, pred_result)
-
-p = ggplot(pred_result, aes(predict, observed)) +
+m <- lm(observed ~ predict, pred_result)
+p <- ggplot(pred_result, aes(predict, observed)) +
   geom_point() + geom_smooth(method = "lm") +
-  labs(title = paste("rho = " , round(cor$estimate, digits = 3), ", P = " , signif(cor$p.value, digits = 3), ", R2 = ", round(summary(m)$r.squared, digits = 3) , sep = "")) +  theme_bw()+theme(panel.grid=element_blank(), 
-				axis.text.x=element_text(colour="black"),
-				axis.text.y=element_text(colour="black"),
-				panel.border=element_rect(colour = "black"),
-				legend.key = element_blank(),plot.title = element_text(hjust = 0.5))
+  labs(title = paste("rho = " , round(cor$estimate, digits = 3), 
+                     ", P = " , signif(cor$p.value, digits = 3), 
+                     ", R2 = ", round(summary(m)$r.squared, digits = 3), sep = "")) + 
+  theme_bw() + theme(panel.grid = element_blank(),
+                     axis.text.x = element_text(colour = "black"),
+                     axis.text.y = element_text(colour = "black"),
+                     panel.border = element_rect(colour = "black"),
+                     legend.key = element_blank(), plot.title = element_text(hjust = 0.5))
 
 ggsave("randomforest_out/10_marker_ASVs_validate.pdf", p, width = 4, height = 4)
-ggsave("randomforest_out/10_marker_ASVs_validate.png", p, width = 4, height = 4, bg = "white")  # 设置PNG图片的背景色为白色
+ggsave("randomforest_out/10_marker_ASVs_validate.png", p, width = 4, height = 4, bg = "white")
 
-```
+# 9. Testing model accuracy on training data
 
-```{r}
-### 用测试数据集测试预测准确性
-# type="response",表示输出预测值
-pred2 <- predict(model, newdata = trainset,type="response")
-#预测结果
-pred_result2 = data.frame(observed = trainset$Temperature, predict = pred2)
+# Make predictions on the train set
+pred2 <- predict(model, newdata = trainset, type = "response")
+pred_result2 <- data.frame(observed = trainset$Temperature, predict = pred2)
 
-#查看相关性检验
-cor2 = cor.test(pred_result2[,1], pred_result2[,2], method = "spearman") # spearman or pearson
+# Correlation test and fit plot
+cor2 <- cor.test(pred_result2[,1], pred_result2[,2], method = "spearman")
 
-#相关性拟合展示：
-
-m2 = lm(observed ~ predict, pred_result2)
-
-p2 = ggplot(pred_result2, aes(predict, observed)) +
+m2 <- lm(observed ~ predict, pred_result2)
+p2 <- ggplot(pred_result2, aes(predict, observed)) +
   geom_point() + geom_smooth(method = "lm") +
-  labs(title = paste("rho = " , round(cor2$estimate, digits = 3), ", P = " , signif(cor2$p.value, digits = 3), ", R2 = ", round(summary(m2)$r.squared, digits = 3) , sep = "")) +  theme_bw()+theme(panel.grid=element_blank(), 
-				axis.text.x=element_text(colour="black"),
-				axis.text.y=element_text(colour="black"),
-				panel.border=element_rect(colour = "black"),
-				legend.key = element_blank(),plot.title = element_text(hjust = 0.5))
+  labs(title = paste("rho = " , round(cor2$estimate, digits = 3), 
+                     ", P = " , signif(cor2$p.value, digits = 3), 
+                     ", R2 = ", round(summary(m2)$r.squared, digits = 3), sep = "")) + 
+  theme_bw() + theme(panel.grid = element_blank(),
+                     axis.text.x = element_text(colour = "black"),
+                     axis.text.y = element_text(colour = "black"),
+                     panel.border = element_rect(colour = "black"),
+                     legend.key = element_blank(), plot.title = element_text(hjust = 0.5))
 
 ggsave("randomforest_out/10_marker_ASVs_train.pdf", p2, width = 4, height = 4)
-ggsave("randomforest_out/10_marker_ASVs_train.png", p2, width = 4, height = 4, bg = "white")  # 设置PNG图片的背景色为白色
-
-```
-
-
-
+ggsave("randomforest_out/10_marker_ASVs_train.png", p2, width = 4, height = 4, bg = "white")
