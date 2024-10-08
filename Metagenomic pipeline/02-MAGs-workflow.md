@@ -320,8 +320,8 @@ nohup dRep dereplicate 03.dreped_MAG/ -g 02.renamed_MAG/*.fa -sa 0.99 -comp 50 -
 
 Faster download from S3 Bucket
 ```sh
-ls aws_mountpoint/metagenome/results/qc/ > list.txt
-parallel -j 4 --xapply "aws s3 cp s3://makuojian/metagenome/results/qc/{}/cleandata/ ./cleandata/ --recursive" ::: `tail -n+1 list.txt`
+ls aws_mountpoint/metagenome/results/qc/ > list_qc.txt
+parallel -j 4 --xapply "aws s3 cp s3://makuojian/metagenome/results/qc/{}/cleandata/ ./cleandata/ --recursive" ::: `tail -n+1 list_qc.txt`
 ```
 Calculate relative abundance of 4507 non-redundant MAGs. 
 ```sh
@@ -362,6 +362,8 @@ Use IQ-TREE to predict the best model and reconstruct Phylogenetic tree (ModelFi
 nohup iqtree -s arc/gtdb_trimal_arc.fasta -m MFP -bb 1000 -bnni -nt 24 -pre arc/iqtree/iqtree_arc > iqtree_arc_log.txt 2>&1 &
 nohup iqtree -s bac/gtdb_trimal_bac.fasta -m MFP -bb 1000 -bnni -nt 24 -pre bac/iqtree/iqtree_bac > iqtree_bac_log.txt 2>&1 &
 ```
+## 3.9 MAGs statistics
+
 Assess MAG quality using CheckM
 ```sh
 screen -S checkm
