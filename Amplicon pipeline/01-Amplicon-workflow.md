@@ -9,7 +9,7 @@ The names of the amplicon sequencing files contain sample information: for examp
 - **QIIME2**: v2023.5
 - **Parallel**: v1.23.0
 
-## 3. Analysis pipeline
+## 3. Analysis pipeline of all samples
 
 ### 3.1 Data Import and Primer Removal
 
@@ -131,6 +131,111 @@ qiime tools export --input-path ../01.data/taxonomy.qza --output-path ./
 qiime tools export --input-path ../01.data/repset-seqs.qza --output-path ./
 qiime tools export --input-path ../01.data/rooted-tree.qza --output-path ./
 ```
+## 4. Analysis pipeline of subgroup samples (Taking the upper layer of mudflats as an example)
 
+### 4.1 Data Filter
 
+Copy original data and metadata
+```sh
+cp /home/ec2-user/00.third/01.all/01.data/* ./01.original_data
+cp /home/ec2-user/00.third/01.all/metadata.txt ./01.original_data
+```
+Filter mudflat upper layer data
+```sh
+qiime feature-table filter-samples \
+  --i-table 01.original_data/feature-table-finally.qza \
+  --m-metadata-file 01.original_data/metadata.txt \
+  --p-where "[Sediment_type]='mudflat' AND [Depth]='1_5cm'" \
+  --o-filtered-table 02.latest_data/feature-table-finally.qza
+```
+Visualize filtered feature table
+```sh
+qiime feature-table summarize \
+  --i-table 02.latest_data/feature-table-finally.qza \
+  --o-visualization 02.latest_data/feature-table-finally.qzv
+```
+Update representative sequences
+```sh
+qiime feature-table filter-seqs \
+  --i-table 02.latest_data/feature-table-finally.qza \
+  --i-data 01.original_data/repset-seqs.qza \
+  --o-filtered-data 02.latest_data/repset-seqs.qza
+```
+Copy taxonomy data
+```sh
+cp 01.original_data/taxonomy.qza 02.latest_data/
+```
+Build phylogenetic tree for 16S analysis
+```sh
+qiime phylogeny align-to-tree-mafft-fasttree \
+  --i-sequences 02.latest_data/repset-seqs.qza \
+  --o-alignment 02.latest_data/aligned-repset-seqs.qza \
+  --p-n-threads 8 \
+  --o-masked-alignment 02.latest_data/masked-aligned-repset-seqs.qza \
+  --o-tree 02.latest_data/unrooted-tree.qza \
+  --o-rooted-tree 02.latest_data/rooted-tree.qza
+```
+### 4.2 Preliminary drawing
 
+Taxonomy bar plot
+```sh
+qiime taxa barplot \
+  --i-table ../01.data/02.latest_data/feature-table-finally.qza \
+  --i-taxonomy ../01.data/02.latest_data/taxonomy.qza \
+  --m-metadata-file ../metadata.txt \
+  --o-visualization taxa-bar-plots.qzv
+```
+### 4.3 Data Processing
+
+Collapse taxonomy at different levels
+```sh
+qiime taxa collapse \
+  --i-table ../01.data/02.latest_data/feature-table-finally.qza \
+  --i-taxonomy ../01.data/02.latest_data/taxonomy.qza \
+  --p-level 1 \
+  --o-collapsed-table taxa_summary/feature-table-final-L1.qza
+
+qiime taxa collapse \
+  --i-table ../01.data/02.latest_data/feature-table-finally.qza \
+  --i-taxonomy ../01.data/02.latest_data/taxonomy.qza \
+  --p-level 2 \
+  --o-collapsed-table taxa_summary/feature-table-final-L2.qza
+
+# Repeat for levels 3 to 7
+qiime taxa collapse --i-table ../01.data/02.latest_data/feature-table-finally.qza --i-taxonomy ../01.data/02.latest_data/taxonomy.qza --p-level 3 --o-collapsed-table taxa_summary/feature-table-final-L3.qza
+qiime taxa collapse --i-table ../01.data/02.latest_data/feature-table-finally.qza --i-taxonomy ../01.data/02.latest_data/taxonomy.qza --p-level 4 --o-collapsed-table taxa_summary/feature-table-final-L4.qza
+qiime taxa collapse --i-table ../01.data/02.latest_data/feature-table-finally.qza --i-taxonomy ../01.data/02.latest_data/taxonomy.qza --p-level 5 --o-collapsed-table taxa_summary/feature-table-final-L5.qza
+qiime taxa collapse --i-table ../01.data/02.latest_data/feature-table-finally.qza --i-taxonomy ../01.data/02.latest_data/taxonomy.qza --p-level 6 --o-collapsed-table taxa_summary/feature-table-final-L6.qza
+qiime taxa collapse --i-table ../01.data/02.latest_data/feature-table-finally.qza --i-taxonomy ../01.data/02.latest_data/taxonomy.qza --p-level 7 --o-collapsed-table taxa_summary/feature-table-final-L7.qza
+```
+Summarize collapsed tables
+```
+parallel -j 1 --xapply "qiime feature-table summarize --i-table taxa_summary/{}.qza --o-visualization taxa_summary/{}.qzv" ::: ls taxa_summary/ | sed 's/.qza//'
+```
+Alpha and Beta diversity analysis
+```sh
+qiime diversity core-metrics-phylogenetic \
+  --i-phylogeny ../01.data/02.latest_data/rooted-tree.qza \
+  --i-table ../01.data/02.latest_data/feature-table-finally.qza \
+  --p-sampling-depth 40208 \
+  --p-n-jobs-or-threads 8 \
+  --m-metadata-file ../metadata.txt \
+  --output-dir core-metrics-results
+```
+Alpha diversity significance tests
+```
+parallel -j 8 --xapply "qiime diversity alpha-group-significance --i-alpha-diversity core-metrics-results/{1}.qza --m-metadata-file ../metadata.txt --o-visualization core-metrics-results/{1}-group-significance.qzv" ::: ls -1 core-metrics-results/*vector.qza | xargs -I {} basename {} .qza
+```
+Beta diversity significance tests
+```sh
+parallel -j 8 --xapply "qiime diversity beta-group-significance --i-distance-matrix core-metrics-results/{1}.qza --m-metadata-file ../metadata.txt --m-metadata-column Month --o-visualization core-metrics-results/{1}-group-significance.qzv --p-pairwise" ::: ls -1 core-metrics-results/*matrix.qza | xargs -I {} basename {} .qza
+```
+### 4.4 Data Export
+
+Export final feature table, taxonomy, representative sequences, and rooted tree
+```sh
+qiime tools export --input-path ../01.data/02.latest_data/feature-table-finally.qza --output-path ./
+qiime tools export --input-path ../01.data/02.latest_data/taxonomy.qza --output-path ./
+qiime tools export --input-path ../01.data/02.latest_data/repset-seqs.qza --output-path ./
+qiime tools export --input-path ../01.data/02.latest_data/rooted-tree.qza --output-path ./
+```
