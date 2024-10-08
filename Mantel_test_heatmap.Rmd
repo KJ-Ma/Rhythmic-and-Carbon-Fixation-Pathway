@@ -1,55 +1,51 @@
-
-```{r}
+# Load required libraries
 library(linkET)
 library(ggplot2)
 library(ggtext)
 library(dplyr)
 library(cols4all)
 
-# 读取环境数据文件
+# Read environmental data file
 env <- read.delim("env.txt", sep = "\t", header = TRUE, row.names = 1)
 
-# 读取ASV数据文件，并将物种注释信息删去
-speciese <- read.delim("feature_table_tax_rare.txt", sep = "\t", header = TRUE, row.names = 1)
-speciese <- speciese[, -ncol(speciese)]
-speciese <- t(speciese)
+# Read ASV data file and remove species annotation information
+species <- read.delim("feature_table_tax_rare.txt", sep = "\t", header = TRUE, row.names = 1)
+species <- species[, -ncol(species)]
+species <- t(species)
 
-# 将样本分组
+# Group samples
 groups <- list(
-  "1_5cm" = grep("\\.S[1-3]$", rownames(speciese), value = TRUE),
-  "5_15cm" = grep("\\.Z[1-3]$", rownames(speciese), value = TRUE),
-  "15_25cm" = grep("\\.X[1-3]$", rownames(speciese), value = TRUE)
+  "1_5cm" = grep("\\.S[1-3]$", rownames(species), value = TRUE),
+  "5_15cm" = grep("\\.Z[1-3]$", rownames(species), value = TRUE),
+  "15_25cm" = grep("\\.X[1-3]$", rownames(species), value = TRUE)
 )
 
-# 计算环境因子的相关性系数及P值
+# Calculate correlation coefficients and p-values for environmental factors
 cor <- correlate(env, method = "pearson")
 cor <- cor |> adjust_pvalue(adjust_method = "fdr")
 corr <- cor %>% as_md_tbl()
 
-# 对每个组进行Mantel测试并合并结果
+# Perform Mantel tests for each group and combine results
 mantel_results <- lapply(names(groups), function(group) {
   samples <- groups[[group]]
   env_subset <- env[rownames(env) %in% samples, , drop = FALSE]
-  species_subset <- speciese[rownames(speciese) %in% samples, , drop = FALSE]
+  species_subset <- species[rownames(species) %in% samples, , drop = FALSE]
   mantel_test(species_subset, env_subset, mantel_fun = 'mantel',
               spec_select = list(group = 1:ncol(species_subset))) %>%
     mutate(Group = group)
 })
 
 mantel <- bind_rows(mantel_results)
-mantel$spec <- mantel$Group #将spec列改为与group列相同
+mantel$spec <- mantel$Group # Rename spec column to match group column
 
-# 对mantel的r和P值重新赋值（设置绘图标签）
+# Assign new values for mantel r and p (set plot labels)
 mantel2 <- mantel %>%
   mutate(r = cut(r, breaks = c(-Inf, 0.2, 0.4, 0.6, Inf),
                  labels = c("<0.2", "0.2-0.4", "0.4-0.6", ">=0.6")),
          p = cut(p, breaks = c(-Inf, 0.001, 0.01, 0.05, Inf),
                  labels = c("<0.001", "0.001-0.01", "0.01-0.05", ">= 0.05")))
 
-# 自定义颜色
-custom_colors <- rev(c4a('rd_bu', 30))
-
-# 绘制环境因子相关性热图
+# Create heatmap of environmental factor correlations
 p4 <- qcorrplot(cor,
                 grid_col = "grey50",
                 grid_size = 0.2,
@@ -68,17 +64,17 @@ p5 <- p4 +
             sig_thres = 0.05,
             colour = 'white')
 
-# 添加mantel测试结果的连线
+# Add lines for Mantel test results
 p6 <- p5 +
   geom_couple(data = mantel2,
               aes(colour = p, size = r),
-              curvature = nice_curvature(by = 'to'), alpha = 0.6, label.size = 8) # label.size分组字体
-# , linetype = Group
+              curvature = nice_curvature(by = 'to'), alpha = 0.6, label.size = 8)
+
 p7 <- p6 +
-  scale_size_manual(values = c(0.5, 1.2, 3)) + # 连线粗细
-  scale_colour_manual(values = c("#B22222", "#9370DB", "#32CD32", "grey35")) + # 连线配色
-  scale_linetype_manual(values = "solid") + # 连线类型设为实线
-  # 修改图例
+  scale_size_manual(values = c(0.5, 1.2, 3)) + # Line thickness
+  scale_colour_manual(values = c("#B22222", "#9370DB", "#32CD32", "grey35")) + # Line colors
+  scale_linetype_manual(values = "solid") + # Line type set to solid
+  # Modify legend
   guides(size = guide_legend(title = "Mantel r",
                              override.aes = list(colour = "grey35"),
                              order = 2),
@@ -88,12 +84,12 @@ p7 <- p6 +
          fill = guide_colorbar(title = "Pearson r", order = 3),
          linetype = guide_legend(title = "Group")) +
   theme(
-    axis.text = element_text(size = 16), # 坐标轴刻度字体大小
-    legend.title = element_text(size = 18), # 图例标题字体大小
-    legend.text = element_text(size = 14) # 图例文本字体大小
+    axis.text = element_text(size = 16), # Axis text size
+    legend.title = element_text(size = 18), # Legend title size
+    legend.text = element_text(size = 14) # Legend text size
   )
 
-# 保存图形
+# Save the figure
 if (!dir.exists("mantel_heatmap")) {
   dir.create("mantel_heatmap")
 }
@@ -103,5 +99,3 @@ png_filename <- paste0("mantel_heatmap/", "mantel_heatmap_mud.png")
 
 ggsave(pdf_filename, p7, width = 35, height = 25, units = "cm")
 ggsave(png_filename, p7, bg = "white", width = 35, height = 25, units = "cm")
-
-```
