@@ -35,7 +35,6 @@ The names of the metagenomic sequencing files contain sample information: for ex
 
 Download contigs from S3 and rename
 ```sh
-mkdir 01contigs
 for i in `tail -n+1 list.txt`; do 
   aws s3 cp s3://makuojian/metagenome/results/mix3_assembly/${i}/megahit/final.contigs.fa 01contigs/
   mv 01contigs/final.contigs.fa 01contigs/mix3_${i}.fa
@@ -43,13 +42,11 @@ done
 ```
 Filter contigs less than 500bp
 ```sh
-mkdir 02contigs_500
 parallel -j 16 --xapply "seqkit seq -j 2 -m 500 01contigs/mix3_{}.fa > 02contigs_500/mix3_500_{}.fa" ::: `tail -n+1 list.txt`
 ```
 Rename contigs using a custom script (rename_contigs.sh)
 ```sh
 screen -S rename_contigs
-mkdir 03renamed_contigs
 bash rename_contigs.sh
 ```
 Gene prediction with Prodigal
@@ -62,12 +59,10 @@ parallel -j 32 --xapply "seqkit stat 04prodigal/{}/{}_nucleotide.fasta" ::: `tai
 ```
 Remove sequences less than 100bp
 ```sh
-mkdir 04prodigal_min_100
 parallel -j 8 --xapply "seqkit seq -m 100 04prodigal/{}/{}_nucleotide.fasta > 04prodigal_min_100/{}_nucleotide_min_100.fasta" ::: `tail -n+1 list.txt`
 ```
 Merge nucleotide sequences from different samples, and deduplicate nucleotide sequences using cd-hit
 ```sh
-mkdir 05partial_merged
 for i in `tail -n+1 list.txt`; do cat 04prodigal_min_100/${i}_nucleotide_min_100.fasta >> 05partial_merged/all_nucleotide.fasta; done
 nohup cd-hit-est -i all_nucleotide.fasta -o all_cdhit_nucleotide.fasta -aS 0.9 -c 0.95 -G 0 -g 1 -d 0 -M 0 -T 64 > all_cdhit.log 2>&1 &
 seqkit stat all_cdhit_nucleotide.fasta -j 24 > all_cdhit_nucleotide_stat.txt
@@ -76,11 +71,11 @@ Extract non-redundant protein sequences
 ```sh
 grep '>' all_cdhit_nucleotide.fasta > non_redundancy_gene_list.txt
 sed -i 's/>//' non_redundancy_gene_list.txt
-for i in `tail -n+1 ../metadata.txt`; do 
+for i in `tail -n+1 ../list.txt`; do 
   s3_key="s3://makuojian/metagenome/results/07rm_redundancy/04prodigal/${i}/${i}_protein.fasta"
   aws s3 cp ${s3_key} protein_temp/
 done
-parallel -j 1 --xapply "cat protein_temp/{}_protein.fasta >> 07partial_cdhit2/all_protein.fasta" ::: `tail -n+1 ../metadata.txt`
+parallel -j 1 --xapply "cat protein_temp/{}_protein.fasta >> 07partial_cdhit2/all_protein.fasta" ::: `tail -n+1 ../list.txt`
 seqkit grep -n -f non_redundancy_gene_list.txt all_protein.fasta > non_redundancy_protein.fasta
 ```
 ### 3.2 Species annotation and quantification
