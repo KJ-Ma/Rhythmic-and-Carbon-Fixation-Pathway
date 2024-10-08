@@ -1,0 +1,121 @@
+# Load required packages
+library(dplyr)
+library(tidyverse)
+library(ggridges)
+library(openxlsx)
+
+# Read in the files
+lomb <- read.xlsx("lomb_results_noreplicate_asv.xlsx", colNames = TRUE, rowNames = TRUE)
+jtk <- read.table("JTKresult_feature_table_tax_rare_inter.txt", header = TRUE, sep = "\t", check.names = FALSE, row.names = 1)
+feature_table <- read.table("feature_table_tax_rare.txt", header = TRUE, sep = "\t", check.names = FALSE, row.names = 1)
+
+# Filter Lomb and JTK results
+filtered_lomb <- lomb %>%
+  filter(PNmax > 0.1, Pval < 0.05)
+
+filtered_jtk <- jtk %>%
+  filter(ADJ.P < 0.05)
+
+# Find the intersection of rhythmic ASVs
+common_rows <- intersect(rownames(filtered_lomb), rownames(filtered_jtk))
+
+# Subset the feature table data frame with the selected rows
+extracted_feature_data <- feature_table[common_rows, ]
+
+# Create directory for plots if it doesn't exist
+if (!dir.exists("plot")) {
+  dir.create("plot")
+}
+
+# Save rhythmic ASV abundance table to local
+write.table(extracted_feature_data, "plot/final_rhythmic_ASV.txt", sep = "\t", quote = FALSE, col.names = NA)
+
+# Sum abundance for rhythmic ASVs by month
+summed_data <- data.frame(row.names = rownames(extracted_feature_data))
+
+# Function to generate new column names based on the specified pattern
+generate_column_names <- function(prefix, num_columns) {
+  months <- c("2020.11", "2020.12", "2021.01", "2021.02", "2021.03", 
+              "2021.04", "2021.05", "2021.06", "2021.07", "2021.08", 
+              "2021.09", "2021.10", "2021.11", "2021.12", "2022.01", 
+              "2022.02", "2022.03", "2022.04", "2022.05", "2022.06", 
+              "2022.07", "2022.08", "2022.09", "2022.10")
+  rep(months, length.out = num_columns)
+}
+
+# Sum every three columns
+for (i in seq(1, ncol(extracted_feature_data), by = 3)) {
+  end_col <- min(i + 2, ncol(extracted_feature_data))
+  column_sum <- rowSums(extracted_feature_data[, i:end_col, drop = FALSE])
+  summed_data <- cbind(summed_data, column_sum)
+}
+
+# Rename the columns
+colnames(summed_data) <- generate_column_names("mud", ncol(summed_data))
+
+# Reshape data for plotting
+species_list <- rownames(summed_data)
+summed_data$Species <- rownames(summed_data)
+
+# Convert to long format
+long_data <- summed_data %>%
+  pivot_longer(cols = -Species, names_to = "Month", values_to = "Abundance")
+
+# Convert Month column to date format
+long_data$Month <- as.Date(paste0(long_data$Month, ".01"), format = "%Y.%m.%d")
+
+# Extract species names
+long_data$Species <- sapply(strsplit(long_data$Species, ";"), function(x) tail(x, 1))
+
+# Create data frames for plotting
+num_species <- 136
+data_frames_list <- list()
+for (i in 1:6) {
+  start_index <- (i - 1) * 20 + 1
+  end_index <- min(i * 20, num_species)
+  selected_data <- subset(long_data, Species %in% unique(long_data$Species)[start_index:end_index])
+  data_frames_list[[i]] <- selected_data
+}
+
+# Create plots and save as files
+plots_list <- list()
+for (i in 1:6) {
+  p <- ggplot(data = data_frames_list[[i]], mapping = aes(x = Month, y = Abundance, 
+                                                           color = Species, fill = Species)) +
+    geom_line() +
+    geom_ribbon(aes(ymin = 0, ymax = Abundance), alpha = 0.2) +
+    scale_x_date(date_labels = "%Y.%m", date_breaks = "3 month") +
+    facet_wrap(. ~ Species, scales = "free_y", ncol = 5) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15), 
+          axis.text.y = element_text(size = 15), 
+          axis.title.x = element_text(size = 30), 
+          axis.title.y = element_text(size = 30)) +
+    theme(strip.text = element_text(size = 15)) +
+    guides(color = "none", fill = "none")
+  
+  plots_list[[i]] <- p
+  
+  # Save plots to files
+  ggsave(paste0("plot/ASV_plot_", i, ".pdf"), p, width = 55, height = 25, units = "cm")
+  ggsave(paste0("plot/ASV_plot_", i, ".png"), p, bg = "white", width = 55, height = 25, units = "cm")
+}
+
+# Plot remaining species if less than 20
+rest_data <- subset(long_data, Species %in% unique(long_data$Species)[121:136])
+
+p <- ggplot(data = rest_data, mapping = aes(x = Month, y = Abundance, 
+                                             color = Species, fill = Species)) +
+    geom_line() +
+    geom_ribbon(aes(ymin = 0, ymax = Abundance), alpha = 0.2) +
+    scale_x_date(date_labels = "%Y.%m", date_breaks = "3 month") +
+    facet_wrap(. ~ Species, scales = "free_y", ncol = 5, nrow = 4) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15), 
+          axis.text.y = element_text(size = 15), 
+          axis.title.x = element_text(size = 30), 
+          axis.title.y = element_text(size = 30)) +
+    theme(strip.text = element_text(size = 15)) +
+    guides(color = "none", fill = "none")
+
+# Save the remaining plot
+ggsave(paste0("plot/ASV_plot_7.pdf"), p, width = 55, height = 25, units = "cm")
+ggsave(paste0("plot/ASV_plot_7.png"), p, bg = "white", width = 55, height = 25, units = "cm")
