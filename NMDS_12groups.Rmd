@@ -4,7 +4,7 @@ library(vegan)
 library(readr)
 
 # Read sample group data file
-dfGroup <- read_delim("metadata.txt", "\t", escape_double = FALSE, trim_ws = TRUE, show_col_types = FALSE)
+dfGroup <- read_delim("metadata_all.txt", "\t", escape_double = FALSE, trim_ws = TRUE, show_col_types = FALSE)
 
 # Read NMDS data file
 feature_tax <- read.delim("feature_table_tax_rare_all.txt", sep = "\t", header = TRUE, row.names = 1)
