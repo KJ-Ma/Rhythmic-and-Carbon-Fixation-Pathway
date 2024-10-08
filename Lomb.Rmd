@@ -1,67 +1,60 @@
-
-
-```{r}
 # Load necessary libraries
 library(lomb)
 library(tidyverse)
 library(openxlsx)
 library(dplyr)
 
+# Read the data and transpose it
+rawdata1 <- as.data.frame(t(read.table("feature_table_tax_rare.txt", 
+                                       header = TRUE, row.names = 1, 
+                                       sep = "\t", stringsAsFactors = FALSE)))
 
-
-# 读取数据，并转置
-rawdata1 <- as.data.frame(t(read.table("feature_table_tax_rare.txt", header = TRUE, row.names = 1, sep = "\t",stringsAsFactors = F)))
-
-# 第一列添加month列
+# Add a month column (repeating from 1 to 24, 3 times each)
 rawdata2 <- cbind(month = rep(1:24, each = 3), rawdata1)
 
-
-# 根据第一列（month）合并相同行名的行并求和
+# Group by the month column and sum rows with the same month
 data <- rawdata2 %>%
   group_by(month) %>%
   summarise_all(sum)
 
+# Suppress warnings
+options(warn = -1)
 
-```
-
-
-```{r}
-
-#关掉警告
-options(warn=-1)
-
-# 提取时间列
+# Extract time (month) data
 time <- data$month
 
-# 创建一个空的数据框来存储结果
+# Create an empty dataframe to store results
 results_df <- data.frame(Species = character(0), Period = numeric(0), 
                          PNmax = numeric(0), Pval = numeric(0))
 
-# 循历每个物种的列
+# Loop through each species column
 for (col in colnames(data)[-1]) {
-  # 提取物种数据,双[]确保提取出来的单列数据为向量而不是数据框
+  # Extract the species data (as a vector)
   species_data <- data[[col]]
   
-  # 使用lomb包的randlsp函数计算周期性
-  lomb_result <- randlsp(repeats=1000, x=species_data, times = time, type = 'period',plot = F, from = 10, to = 14, ofac=50, normalize="standard",trace = F)
-  summ_lomb <-summary(lomb_result)
-  # 提取周期和振幅信息
+  # Compute periodicity using Lomb-Scargle method
+  lomb_result <- randlsp(repeats = 1000, x = species_data, times = time, 
+                         type = 'period', plot = FALSE, from = 10, to = 14, 
+                         ofac = 50, normalize = "standard", trace = FALSE)
+  
+  summ_lomb <- summary(lomb_result)
+  
+  # Extract period, amplitude, and p-value
   Period <- summ_lomb[which(rownames(summ_lomb) == "At  period"), ] 
   PNmax <- summ_lomb[which(rownames(summ_lomb) == "PNmax"), ]
   Pval <- summ_lomb[which(rownames(summ_lomb) == "P-value (PNmax)"), ]
   
-  # 将结果添加到结果数据框
+  # Append the results to the dataframe
   results_df <- rbind(results_df, data.frame(Species = col, Period = Period, 
                                              PNmax = PNmax, Pval = Pval))
 }
 
-
-# 保存结果到Excel文件
+# Create a directory for saving results (if not exists)
 if (!file.exists("results")) {
   dir.create("results")
 }
-#路径
+
+# Define file path and save results to Excel
 file_path <- file.path("results/", "lomb_results_noreplicate_asv.xlsx")
-#保存
 write.xlsx(results_df, file_path)
-```
+
