@@ -1,0 +1,107 @@
+
+```{r}
+library(linkET)
+library(ggplot2)
+library(ggtext)
+library(dplyr)
+library(cols4all)
+
+# 读取环境数据文件
+env <- read.delim("env.txt", sep = "\t", header = TRUE, row.names = 1)
+
+# 读取ASV数据文件，并将物种注释信息删去
+speciese <- read.delim("feature_table_tax_rare.txt", sep = "\t", header = TRUE, row.names = 1)
+speciese <- speciese[, -ncol(speciese)]
+speciese <- t(speciese)
+
+# 将样本分组
+groups <- list(
+  "1_5cm" = grep("\\.S[1-3]$", rownames(speciese), value = TRUE),
+  "5_15cm" = grep("\\.Z[1-3]$", rownames(speciese), value = TRUE),
+  "15_25cm" = grep("\\.X[1-3]$", rownames(speciese), value = TRUE)
+)
+
+# 计算环境因子的相关性系数及P值
+cor <- correlate(env, method = "pearson")
+cor <- cor |> adjust_pvalue(adjust_method = "fdr")
+corr <- cor %>% as_md_tbl()
+
+# 对每个组进行Mantel测试并合并结果
+mantel_results <- lapply(names(groups), function(group) {
+  samples <- groups[[group]]
+  env_subset <- env[rownames(env) %in% samples, , drop = FALSE]
+  species_subset <- speciese[rownames(speciese) %in% samples, , drop = FALSE]
+  mantel_test(species_subset, env_subset, mantel_fun = 'mantel',
+              spec_select = list(group = 1:ncol(species_subset))) %>%
+    mutate(Group = group)
+})
+
+mantel <- bind_rows(mantel_results)
+mantel$spec <- mantel$Group #将spec列改为与group列相同
+
+# 对mantel的r和P值重新赋值（设置绘图标签）
+mantel2 <- mantel %>%
+  mutate(r = cut(r, breaks = c(-Inf, 0.2, 0.4, 0.6, Inf),
+                 labels = c("<0.2", "0.2-0.4", "0.4-0.6", ">=0.6")),
+         p = cut(p, breaks = c(-Inf, 0.001, 0.01, 0.05, Inf),
+                 labels = c("<0.001", "0.001-0.01", "0.01-0.05", ">= 0.05")))
+
+# 自定义颜色
+custom_colors <- rev(c4a('rd_bu', 30))
+
+# 绘制环境因子相关性热图
+p4 <- qcorrplot(cor,
+                grid_col = "grey50",
+                grid_size = 0.2,
+                type = "upper",
+                diag = FALSE,
+                width = 35,
+                height = 15) +
+  geom_square() +
+  scale_fill_gradientn(colours = custom_colors,
+                       limits = c(-1, 1))
+
+p5 <- p4 +
+  geom_mark(size = 4,
+            only_mark = TRUE,
+            sig_level = c(0.05, 0.01, 0.001),
+            sig_thres = 0.05,
+            colour = 'white')
+
+# 添加mantel测试结果的连线
+p6 <- p5 +
+  geom_couple(data = mantel2,
+              aes(colour = p, size = r),
+              curvature = nice_curvature(by = 'to'), alpha = 0.6, label.size = 8) # label.size分组字体
+# , linetype = Group
+p7 <- p6 +
+  scale_size_manual(values = c(0.5, 1.2, 3)) + # 连线粗细
+  scale_colour_manual(values = c("#B22222", "#9370DB", "#32CD32", "grey35")) + # 连线配色
+  scale_linetype_manual(values = "solid") + # 连线类型设为实线
+  # 修改图例
+  guides(size = guide_legend(title = "Mantel r",
+                             override.aes = list(colour = "grey35"),
+                             order = 2),
+         colour = guide_legend(title = "Mantel p",
+                               override.aes = list(size = 3),
+                               order = 1),
+         fill = guide_colorbar(title = "Pearson r", order = 3),
+         linetype = guide_legend(title = "Group")) +
+  theme(
+    axis.text = element_text(size = 16), # 坐标轴刻度字体大小
+    legend.title = element_text(size = 18), # 图例标题字体大小
+    legend.text = element_text(size = 14) # 图例文本字体大小
+  )
+
+# 保存图形
+if (!dir.exists("mantel_heatmap")) {
+  dir.create("mantel_heatmap")
+}
+
+pdf_filename <- paste0("mantel_heatmap/", "mantel_heatmap_mud.pdf")
+png_filename <- paste0("mantel_heatmap/", "mantel_heatmap_mud.png")
+
+ggsave(pdf_filename, p7, width = 35, height = 25, units = "cm")
+ggsave(png_filename, p7, bg = "white", width = 35, height = 25, units = "cm")
+
+```
