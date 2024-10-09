@@ -223,7 +223,7 @@ qiime diversity core-metrics-phylogenetic \
   --output-dir core-metrics-results
 ```
 Alpha diversity significance tests
-```
+```sh
 parallel -j 8 --xapply "qiime diversity alpha-group-significance --i-alpha-diversity core-metrics-results/{1}.qza --m-metadata-file ../metadata_mudS.txt --o-visualization core-metrics-results/{1}-group-significance.qzv" ::: ls -1 core-metrics-results/*vector.qza | xargs -I {} basename {} .qza
 ```
 Beta diversity significance tests
