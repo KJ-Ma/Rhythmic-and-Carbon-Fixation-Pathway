@@ -44,6 +44,7 @@ Rhythmic-and-Carbon-Fixation-Pathway-main
 │    │    └─ list_all_sample.txt
 │    ├─ Metadata
 │    │    └─ list.txt
+│    ├─ count_temp_adapt_aa.py
 │    ├─ merge_abundance_eggnog.py
 │    ├─ modify_abundance_eggnog.py
 │    ├─ rename_contigs.sh
